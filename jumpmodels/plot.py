@@ -151,7 +151,7 @@ def plot_cumret(ret_df: Union[PD_TYPE, dict],
     ret_df.cumsum(axis=0).plot(ax=ax)
     # set ax attrs
     ax.set(ylabel=ylabel_ret)
-    convert_yaxis_to_percent(ax)
+    #convert_yaxis_to_percent(ax)
     return ax
 
 ############################

@@ -127,7 +127,8 @@ class DataLoader(BaseEstimator):
         """
         # load raw data
         curr_dir = get_curr_dir()
-        ret_ser_raw = pd.read_pickle(f"{curr_dir}/data/{self.ticker}.pkl").ret.dropna()
+        # ret_ser_raw = pd.read_pickle(f"{curr_dir}/data/{self.ticker}.pkl").ret.dropna()
+        ret_ser_raw = pd.read_csv(f"{curr_dir}/data/{self.ticker}.csv", index_col='date', parse_dates=[0]).ret.dropna()
         ret_ser_raw.name = self.ticker
         # features
         df_features_all = feature_engineer(ret_ser_raw, self.ver)

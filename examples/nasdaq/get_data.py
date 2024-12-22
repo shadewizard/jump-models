@@ -19,11 +19,13 @@ TICKER = "NDX"   # Nasdaq-100 Index
 
 def get_data():
     # download closing prices
-    close: pd.Series = yf.download("^"+TICKER, start="1985-10-01", end="2024-09-30")['Close']
+    close: pd.Series = yf.download("^"+TICKER, start="1985-10-01", end="2024-12-09")['Close']
     # convert to ret
     ret = close.pct_change()
     # concat as df
-    df = pd.DataFrame({"close": close, "ret": ret}, index=close.index.date)
+    #df = pd.DataFrame({"close": close, "ret": ret}, index=close.index.date)
+    df = pd.concat([close, ret], axis=1)
+    df.columns = ['close', 'ret']
     df.index.name = "date"
 
     # save

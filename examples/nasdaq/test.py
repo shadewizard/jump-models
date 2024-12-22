@@ -13,45 +13,23 @@ from jumpmodels.jump import JumpModel                 # class of JM & CJM
 from jumpmodels.sparse_jump import SparseJumpModel    # class of Sparse JM
 
 
-# # Load Data & Features
-# 
-# This example demonstrates the class of *statistical jump models* (JMs) and various helper functions for regime analysis provided by our package `jumpmodels`, using an application on the Nasdaq-100 Index. 
-# The core classes, `JumpModel` and `SparseJumpModel`, implement the original JM, continuous JM (CJM), and sparse JM (SJM) with feature selection.
-# These models follow the API style used in `scikit-learn` for easy integration and efficient usage.
-# For detailed mathematical and algorithmic explanations of these models, please refer to the literature cited in the `README`.
-# 
-# Relevant helper functions will be imported as needed throughout this example.
-# If running this notebook in Jupyter Lab/Notebook poses any issues, there is an exported `.py` script available in this folder for convenient execution.
-# 
-
-# ## Raw Data
-# 
-# In this example, we analyze the regimes of the Nasdaq-100 Index.
-# The daily index price data is retrieved from [Yahoo Finance](https://finance.yahoo.com/quote/%5ENDX/) under the ticker `NDX`. 
-# 
-# The data retrieval is handled in the script `get_data.py`, and the dataset is already saved in the `example/Nasdaq/data/` folder in both `csv` and `pkl` formats, so there’s no need to run `get_data.py` manually.
-# 
-# We work with daily frequency data using `pandas` DataFrames, where the index is of type `datetime.date`. 
-# This format is consistent with the convention used in the `CRSP` database. 
-# All helper functions in this package are designed to support this type of date index.
-
-# ## Feature Engineering
-# 
-# Feeding the model a robust feature set is key to the successful application of any learning algorithm. 
-# This example uses a simple feature set consisting of nine features: the exponentially weighted moving (EWM) return, downside deviation (in log scale), and Sortino ratio, each computed with three halflife values ranging from one week (5 days) to one quarter (3 months). 
-# 
-# Users may need to adjust the features or halflives to suit their specific applications. 
-# The literature referenced in the `README` offers a solid foundation for further exploration.
-# 
-# The computation of these features is detailed in `feature.py` in the same folder as this example, and we use the `DataLoader` class to load both the index returns and the engineered features.
-# The loaded data covers the period from the start of 2007 to the end of September 2024.
-
 # In[2]:
+
+
+from util.data import dfwind
+
+ticker = "000300.SH"
+ticker = "SPX.GI"
+cp = dfwind.get_wsddata(ticker,'CLOSE')
+cp.index.names = ['date']
+cp['ret'] = cp['CLOSE'].pct_change()
+cp = cp.dropna()
+cp.to_csv(f'{ticker}.csv')
 
 
 from feature import DataLoader
 
-data = DataLoader(ticker="NDX", ver="v0").load(start_date="2007-1-1", end_date="2024-09-30")
+data = DataLoader(ticker=ticker, ver="v0").load(start_date="2005-01-01", end_date="2024-12-12")
 
 print("Daily returns stored in `data.ret_ser`:", "-"*50, sep="\n")
 print(data.ret_ser, "-"*50, sep="\n")
@@ -68,7 +46,7 @@ print(data.X)
 # In[3]:
 
 
-train_start, test_start = "2007-1-1", "2022-1-1"
+train_start, test_start = "2006-1-1", "2014-1-1"
 # filter dates
 X_train = filter_date_range(data.X, start_date=train_start, end_date=test_start)
 X_test = filter_date_range(data.X, start_date=test_start)
@@ -77,17 +55,6 @@ train_start, train_end = X_train.index[[0, -1]]
 test_start, test_end = X_test.index[[0, -1]]
 print("Training starts at:", train_start, "and ends at:", train_end)
 print("Testing starts at:", test_start, "and ends at:", test_end)
-
-
-# The module `jumpmodels.preprocess` provides two classes for preprocessing: one for standardizing and one for clipping the feature data. 
-# We first clip the data within three standard deviations for all features and then perform standardization before feeding the data into the JMs. 
-# Both classes are first fitted on the training data and subsequently used to transform the test data.
-# 
-# These classes support both `pandas` DataFrames and `numpy` arrays as direct inputs and outputs. 
-# We prefer to retain the DataFrame type whenever possible to preserve the date index and column labels.
-
-# In[4]:
-
 
 # Preprocessing
 from jumpmodels.preprocess import StandardScalerPD, DataClipperStd
@@ -165,26 +132,6 @@ savefig_plt(f"{get_curr_dir()}/plots/JM_lambd-{jump_penalty}_train.pdf")
 # As an example, we reset the jump penalty to zero, effectively reducing the model to a baseline $k$-means clustering algorithm where temporal information is ignored. 
 # This comparison illustrates the value of applying a jump penalty to ensure temporal consistency and reduce the occurrence of unrealistic regime shifts.
 
-# In[9]:
-
-
-# reset jump_penalty to zero
-jump_penalty=0.
-jm.set_params(jump_penalty=jump_penalty)
-print("The jump penalty of the JM instance has been reset to: jm.jump_penalty =", jm.jump_penalty)
-
-
-# In[10]:
-
-
-# refit
-jm.fit(X_train_processed, data.ret_ser, sort_by="cumret")
-
-# plot
-ax, ax2 = plot_regimes_and_cumret(jm.labels_, data.ret_ser, n_c=2, start_date=train_start, end_date=train_end, )
-ax.set(title=f"In-Sample Fitted Regimes by the JM ($\\lambda$={jump_penalty})")
-savefig_plt(f"{get_curr_dir()}/plots/JM_lambd-{jump_penalty}_train.pdf")
-
 
 # ## Online Inference
 # 
@@ -196,24 +143,12 @@ savefig_plt(f"{get_curr_dir()}/plots/JM_lambd-{jump_penalty}_train.pdf")
 
 # In[11]:
 
-
 # refit
 jump_penalty=50.
 jm.set_params(jump_penalty=jump_penalty).fit(X_train_processed, data.ret_ser, sort_by="cumret")
 # make online inference 
 labels_test_online = jm.predict_online(X_test_processed)
 
-
-# From the visualization below, we observe that the JM effectively signals the bear market in 2022, driven by aggressive interest rate hikes. 
-# This period saw a return of over $-$15% and a significant drawdown.
-# However, the brief bear period captured in the second half of 2024 is followed by a strong price reversal.
-# This latency issue constitutes a common challenge in real-time applications of regime-switching signals.
-# Improving the feature set or fine-tuning the jump penalty may help address this issue.
-
-# In[12]:
-
-
-# plot and save
 ax, ax2 = plot_regimes_and_cumret(labels_test_online, data.ret_ser, n_c=2, start_date=test_start, end_date=test_end, )
 ax.set(title=f"Out-of-Sample Online Inferred Regimes by the JM ($\\lambda$={jump_penalty})")
 savefig_plt(f"{get_curr_dir()}/plots/JM_lambd-{jump_penalty}_test_online.pdf")
@@ -226,72 +161,12 @@ savefig_plt(f"{get_curr_dir()}/plots/JM_lambd-{jump_penalty}_test_online.pdf")
 
 # In[13]:
 
-
 # make inference using all test data
 labels_test = jm.predict(X_test_processed)
 # plot
 ax, ax2 = plot_regimes_and_cumret(labels_test, data.ret_ser, n_c=2, start_date=test_start, end_date=test_end, )
 _ = ax.set(title=f"Out-of-Sample Predicted Regimes by the JM Using All Test Data ($\\lambda$={jump_penalty})")
 
-
-# # CJM: Continuous Extension of the JM
-# 
-# With this, we conclude a minimal overview of the core functionality of using JMs to assign regime labels to in-sample training periods and leverage trained models for out-of-sample prediction, either through online inference or by processing all data at once. 
-# The methods -- such as `.fit()`, `.set_params()`, and `predict_online()` -- extend seamlessly to the following JM variants: CJM and SJM. 
-# Here, we provide brief illustrations of these extensions.
-
-# ## In-Sample Fitting
-# 
-# The CJM (Continuous Jump Model) uses the same `JumpModel` class as the discrete model, with the parameter `cont=True`. 
-# 
-# ### Parameters 
-# 
-# Regarding the jump penalty value, it is typically set to be 10 times larger than the $\lambda$ used in the discrete model to achieve similar fittings, so we choose $\lambda=600.0$ here.
-# 
-# Additionally, CJM introduces two specialized parameters: `mode_loss` and `grid_size`, which require more nuanced understanding. 
-# Generally, the default values are recommended for most cases.
-# 
-
-# In[14]:
-
-
-jump_penalty=600.
-cjm = JumpModel(n_components=2, jump_penalty=jump_penalty, cont=True)
-
-
-# The `proba_` attribute of the CJM instance stores the estimated probability of each period belonging to each state.
-# Unlike the discrete model, where the state assignment changes abruptly, CJM offers smooth probability transitions, ranging from 0% to 100%. 
-# This probabilistic interpretation has potential applications in many domains, especially where softer regime assignments are beneficial.
-
-# In[15]:
-
-
-cjm.fit(X_train_processed, data.ret_ser, sort_by="cumret")
-
-# plot
-ax, ax2 = plot_regimes_and_cumret(cjm.proba_, data.ret_ser, n_c=2, start_date=train_start, end_date=train_end, )
-ax2.set(ylabel="Regime Probability")
-ax.set(title=f"In-Sample Fitted Regimes by the CJM ($\\lambda$={jump_penalty})")
-savefig_plt(f"{get_curr_dir()}/plots/CJM_lambd-{jump_penalty}_train.pdf")
-
-
-# ## Online Inference
-# 
-# The `.predict_proba_online()` method allows CJM to make probabilistic regime inferences online.
-# From the plot, we observe that the confidence in the bear market during late 2024 doesn't fully reach 100%, potentially reducing the mislabeling issue discussed earlier. 
-# This smoother transition in probabilities may offer better regime detection in uncertain market conditions.
-
-# In[16]:
-
-
-# online inference
-proba_test_online = cjm.predict_proba_online(X_test_processed)
-
-# plot
-ax, ax2 = plot_regimes_and_cumret(proba_test_online, data.ret_ser, start_date=test_start, end_date=test_end, )
-ax2.set(ylabel="Regime Probability")
-ax.set(title=f"Out-of-Sample Online Inferred Regimes by the CJM ($\\lambda$={jump_penalty})")
-savefig_plt(f"{get_curr_dir()}/plots/CJM_lambd-{jump_penalty}_test_online.pdf")
 
 
 # # SJM: Sparse JM with Feature Selection
@@ -318,35 +193,15 @@ sjm = SparseJumpModel(n_components=2, max_feats=max_feats, jump_penalty=jump_pen
 # fit
 sjm.fit(X_train_processed, ret_ser=data.ret_ser, sort_by="cumret")
 
-
 # The feature weights are stored in the attribute `feature_weights`. 
 # Generally, we observe that features with longer halflives receive higher weights, indicating that less smoothed features are noisier and are excluded from the model, thanks to the feature weighting mechanism.
 
-# In[18]:
-
-
 print("SJM Feature Weights:", "-"*50, sjm.feat_weights, sep="\n")
-
-
-# A comparison of the SJM-identified regimes with those identified by JM reveals that the GFC is consolidated into a single bear regime, demonstrating that short-term noise has been effectively mitigated.
-
-# In[19]:
-
 
 # plot
 ax, ax2 = plot_regimes_and_cumret(sjm.labels_, data.ret_ser, n_c=2, start_date=train_start, end_date=train_end, )
 ax.set(title=f"In-Sample Fitted Regimes by the SJM ($\\lambda$={jump_penalty}, $\\kappa^2$={max_feats})")
 savefig_plt(f"{get_curr_dir()}/plots/SJM_lambd-{jump_penalty}_max-feats-{max_feats}_train.pdf")
-
-
-# ## Online Inference
-# 
-# As before, the `.predict_online()` method handles online inference. 
-# Notably, through feature selection, the previously problematic bear market signal in late 2024 is absent in the SJM's online inference, highlighting the potential benefits of feature selection.
-# 
-# 
-
-# In[20]:
 
 
 # online inference
@@ -357,17 +212,6 @@ ax, ax2 = plot_regimes_and_cumret(labels_test_online_sjm, data.ret_ser, start_da
 ax.set(title=f"Out-of-Sample Online Inferred Regimes by the SJM ($\\lambda$={jump_penalty}, $\\kappa^2$={max_feats})")
 savefig_plt(f"{get_curr_dir()}/plots/SJM_lambd-{jump_penalty}_max-feats-{max_feats}_test_online.pdf")
 
-
-# # Conclusion
-# 
-# This concludes the introduction to the functionalities of our `jumpmodels` library. 
-# The field of statistical jump models is still actively evolving, with ongoing research exploring new avenues.
-# We hope that the models and helper functions provided in this package will be useful in your own work. 
-# Citations and credits are always appreciated.
-# 
-# We welcome pull requests and open issues, and I’m happy to discuss any related questions.
-
-# In[ ]:
 
 
 
